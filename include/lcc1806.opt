@@ -1,0 +1,334 @@
+#14-07-22 adding opt6.1
+#15-04-15 disabling opt14 for R0
+#17-01-24 trying to warn on assignment/comparison errors
+#17-03-06 disabling optimization for pushr
+#17-03-07 adding optimization for popr
+#20-05-31 eliminating redundant reload
+#20-06-01 redundant copies reduction
+#20-06-07 eliminate some promotions before inc/dec followed by a store
+#20-07-15 aggressive optimizations for cross-shoot
+#20-07-24 recovered file - one more optimization
+#20-10-04 new opt 20-10.1
+#20-12-03 new opt 20-12.1/2 driven by liveness analysis
+#21-01-24 corrected error in opt 20-12.1, removed opt 20-10.1 which make no sense at all to me.
+#	ld1 %1,%2,%3,%4
+#	jcI1I %1,%5,%6,%7 
+#=
+#	ld1 %1,%2,%3,%4
+#	lbnz %7		;opt 20-10.1  
+	ldaD %1,%2; reg:acon
+	st2 %1,'O',sp,(%3); arg+f**
+	ldaD %1,%4; reg:acon
+=
+	st2i %2,'O',sp,(%3); opt 20-12.1
+	ldaD %1,%4; reg:acon
+
+	zExt %1 ;CVUI2(reg): widen unsigned char to signed int (zero extend)*
+	incm %1,%2
+	str1 %1,%3; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+;%9
+=
+	;zExt %1 ;removed opt2020-3
+	incm %1,%2
+	str1 %1,%3; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+;%9
+
+	cpy2 %1,R15 ;LOADU2*(reg)
+	cpy1 %2,%1;LOADU1(reg)
+;%9
+=
+	cpy1 %2,R15 ;LOADU1(LOADU2*(reg)) opt2020-2
+;%9
+
+	st2 %1,%2,%3,%4; ASGNI2(addr,reg)
+	ld2 %1,%2,%3,%4 ;reg:INDIRI2(addr)
+=
+	st2 %1,%2,%3,%4; ASGNI2(addr,reg) -removing reg:INDIRI2(addr) opt2020-1 
+
+
+	popr %1
+	popr %2
+=
+	popf %1	;opt11.3
+	popl %2	;opt11.3
+
+	popl %1	;%3
+	popr %2
+=
+	popm %1	;opt11.4
+	popl %2	;opt11.4
+
+	ldaD %1,%2; reg:acon
+	cpy1 %3,%1;LOADU1(reg)
+	jnzU1 %1,%4; NEI2(CVUI2(reg),con0)
+=
+	ldaD %1,%2; reg:acon
+	cpy1 %3,%1;LOADU1(reg)
+	MESSAGE "%l ASSIGNMENT USED AS COMPARISON OPERATOR? - IS THAT WHAT YOU WANTED?"
+	jnzU1 %1,%4; NEI2(CVUI2(reg),con0)
+
+	ld2z %3
+	st2I %1,'O',sp,(%2); ASGNI2(addr,acon)
+	jzU2 %3,%4; EQ 0
+=
+	ld2z %3 
+	st2I %1,'O',sp,(%2); ASGNI2(addr,acon)
+	MESSAGE "ASSIGNMENT USED AS COMPARISON OPERATOR? - IS THAT WHAT YOU WANTED?"
+	jzU2 %3,%4; EQ 0 
+
+	release 0; release room for local variables 
+=
+
+_main:		;framesize=%1
+=
+_main: ;copt is peeping your size %1 frame with 2020-7 vision
+
+	cpy2 %1,%2 ;LOAD%3(reg)
+	cpy2 %2,%1
+=
+	cpy2 %1,%2 ;LOAD%3(reg) ;opt1.1
+
+	shrU2I %1,8
+=
+	ghi	%1	;opt2
+	plo	%1
+	ldi	0
+	phi	%1	
+
+	ld2 %1,'O',sp,(%2) ;reg:INDIRI2(addr)
+	st1 %1,'O',sp,(%2); ASGNU1
+=
+	demote	%2	;opt3
+
+	st2 %1,'O',sp,(%2); flag1 
+	demote	%2	;opt3
+=
+	st1 %1,'O',sp,(%2)	; opt4 
+
+	st2 %1,'O',%2,0; ASGN%32(addr,reg)
+=
+	str2 %1,%2	;opt5 ASGN%32
+
+	st2I %1,'O',%2,0; ASGNI2(addr,acon)
+=
+	str2I %1,%2	;opt8.3n
+
+	cpy2 %1,%2
+	shl2I %1,2
+=
+	shlR2R	%1,%2	;opt6.1
+	shl2I 	%1,1	;opt6.1
+
+	cpy2 %1,%2
+	shl2I %1,1
+=
+	shlR2R	%1,%2	;opt6
+
+	ld2 %1,'O',%1,0 ;reg:INDIR%82(addr)
+=
+	ldn2s %1,%1	;opt9xs
+
+	ld2 %1,'O',%2,0 ;reg:INDIR%82(addr)
+=
+	ldn2 %1,%2	;opt9x
+
+
+	ld2 %1,%2,%3,%4 ;reg:INDIRP2(addr)
+	str2 %1,%5	;opt5 ASGNP2
+;%9
+=
+	lda2 memaddr,%2,%3,%4	;opt12.7
+	mvcn2 %5,memaddr
+;%9
+
+	ldn2 %1,%2	;opt9x
+	str2 %1,%3	;opt5 %8
+;%9
+=
+	mvcn2 %3,%2	;opt12x
+;%9
+
+	ldn2s %1,%2	;opt9xs
+	str2 %1,%3	;opt5 %8
+;%9
+=
+	mvcn2 %3,%2	;opt12xs
+;%9
+
+	ldn2s %1,%2	;opt9xs
+	str2 %1,%3	;opt5 %8
+%9:
+=
+	mvcn2 %3,%2	;opt12xs:
+%9:
+
+	ld2 %1,%2,%3,%4 ;reg:INDIRI2(addr)
+	st2 %1,%5,%6,%7; ASGNI2(addr,reg)
+	lbr %8
+%9:
+=
+	mvc2 %1,%5,%6,%7,%2,%3,%4	;opt12
+	lbr %8
+%9:
+
+	ld2 %1,%2,%3,%4 ;reg:INDIRI2(addr)
+	st2 %1,%5,%6,%7; arg+f**
+	ld2 %1,'O',sp,(%8) ;reg:INDIRI2(addr)
+=
+	mvc2 %1,%5,%6,%7,%2,%3,%4	;opt12.1
+	ld2 %1,'O',sp,(%8) ;reg:INDIRI2(addr)
+
+	ld2 %1,%2,%3,%4 ;reg:INDIRI2(addr)
+	st2 %1,%5,%6,%7; arg+f**
+	Ccall %8; CALLI2(ar)
+=
+	mvc2 %1,%5,%6,%7,%2,%3,%4	;opt12.2
+	Ccall %8; CALLI2(ar)
+
+	ld2 %1,%2,%3,%4;reg:  INDIRP2(addr)
+	st2 %1,%5,%6,%7; ASGNP2
+;%9
+=
+	mvc2 %1,%5,%6,%7,%2,%3,%4	;opt12.3
+;%9
+
+	cpy1 %1,%2
+	zExt %1 ;CVUI2(reg)*: widen unsigned char to signed int (zero extend)*
+	incm %1,1
+	cpy1 %2,%1;LOADU1(reg)
+%9:
+=
+	incm %2,1	;opt13
+%9:
+
+	ld1 %1,'O',R0,0
+=
+	ld1 %1,'O',R0,0 ;opt14 would generate ldn1 0 which is illegal
+
+	ld1 %1,'O',%2,0
+=
+	ldn1 %1,%2	;opt14*
+
+	ld1 %1,'O',sp,(0)
+=
+	ldn1 %1,sp	;opt14.1*
+
+	st2 R12,'O',sp,(%1); flag1 
+	st2 R13,'O',sp,(%2); flag2
+=
+	st2 R12,'O',sp,(%1)			
+	inc memaddr				;opt16
+	str2 R13,memaddr			
+
+	st2 R12,'O',sp,(%1); flag1 
+	st2 R13,'O',sp,(%2); flag1 
+=
+	st2 R12,'O',sp,(%1)			
+	inc memaddr				;opt16.1
+	str2 R13,memaddr			
+
+	ldA2 %1,'O',sp,(1); reg:addr
+=
+	ldaXs %1,sp,(1)			;opt17
+
+	ldA2 %1,'O',sp,(0); reg:addr
+=
+	ldaXs %1,sp,(0)			;opt17.1
+
+	ld1 %1,'O',sp,(1)
+	str1 %1,%2; ASGNU1(indaddr,reg)		DH
+;%9
+=
+	ldaXs memaddr,sp,(1)	;opt18
+	mvcn1 %2,memaddr
+;%9
+
+	ld2 %1,'O',sp,(0) ;reg:INDIRI2(addr)
+=
+	cpy2 memaddr,sp	;opt19
+	ldn2 %1,memaddr
+
+	ldn2 %1,memaddr
+	jneU2I %1,%2,%3; NE
+;%9
+=
+	jneU2NI memaddr,%2,%3	;opt20
+;%9
+
+	zExt %1 ;CVUI2: widen unsigned char to signed int (zero extend)
+	ldn1 %2,%3	;opt14*
+	zExt %2 ;CVUI2: widen unsigned char to signed int (zero extend)
+	jeqI2 %1,%2,%4; EQI2(reg,reg)
+;%9
+=
+	ldn1 %2,%3	;opt14*
+	jeqI1 %1,%2,%4	;opt21
+;%9
+
+	zExt %1 ;CVUI2(reg): widen unsigned char to signed int (zero extend)*
+	incm %1,%2
+	str1 %1,%3; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+;%9
+=
+	;zExt %1 ;removed opt2020-3
+	incm %1,%2
+	str1 %1,%3; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+;%9
+
+	cpy2 %1,R15 ;LOADU2*(reg)
+	cpy1 %2,%1;LOADU1(reg)
+;%9
+=
+	cpy1 %2,R15 ;LOADU1(LOADU2*(reg)) opt2020-2
+;%9
+
+	st2 %1,%2,%3,%4; ASGNI2(addr,reg)
+	ld2 %1,%2,%3,%4 ;reg:INDIRI2(addr)
+=
+	st2 %1,%2,%3,%4; ASGNI2(addr,reg) -removing reg:INDIRI2(addr) opt2020-1 
+
+	ldA2 %1,'O',sp,(%3); reg:addr
+	ld2 %2,'O',sp,(%3) ;reg:INDIRI2(addr)
+	str1 %2,%1; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+=
+	demote %3 ;aggressive opt 2020-7
+
+	st2 R12,'O',sp,(%1)			
+	inc memaddr				;opt16.1
+	str2 R13,memaddr			
+	demote %1 ;aggressive opt 2020-7
+	demote %2 ;aggressive opt 2020-7
+=
+	st1 R12,'O',sp,(%1) ;wildly aggressive opt 20-1
+	incm memaddr,2
+	str1 R13,memaddr ;end of wildly aggressive opt 20-1
+
+	ldA2 %1,'O',sp,(%2); reg:addr
+	ld1 %3,'O',sp,(%2)
+	zExt %3 ;CVUI2(reg): widen unsigned char to signed int (zero extend)*
+	incm %3,1
+	str1 %3,%1; ASGNU1(indaddr,LOADU1(LOADU2(reg))) 18-03-21
+=
+	ldA2 %1,'O',sp,(%2); begin opt 2020-3
+	ldn1 %3,%1
+	incm %3,1
+	str1 %3,%1; end of opt 2020-3
+
+	cpy1 %1,%2
+	zExt %1 ;CVUI2(reg): widen unsigned char to signed int (zero extend)*
+	incm %1,1
+	cpy1 %2,%1;LOADU1(reg)
+=
+	incm %2,1	;opt 20-2 unsigned char for loop increment
+
+	st2 R12,'O',sp,(%1); flag1 
+	demote %1 ;aggressive opt 2020-7
+=
+	st1 R12,'O',sp,(%1); flag1 opt 2020-7.1
+
+	cpy2 %1,R15 ;LOADU2*(reg)
+	jcU2 %2,%1,%3,%4;%8
+;%9
+=
+	jcU2 %2,R15,%3,%4	;aggressive opt 2020-8
+;%9
