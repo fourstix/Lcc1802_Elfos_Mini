@@ -36,7 +36,7 @@ void main(){
     printf("FD addr: 0x%x\n", fd);
     printFdInfo(fd);
     //write characters and null into file 
-    n_writ = elfos_write_file(fd, data, 10);
+    n_writ = write(fd, data, 10);
     printf("File Write result: 0x%x\n", n_writ);
     printFdInfo(fd);
     

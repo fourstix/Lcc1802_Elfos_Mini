@@ -30,7 +30,7 @@ char _c_stderr;
  * buffered file io functiosn read and write to the Elf/OS dta as a buffer.
  */    
 FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
-  {0, &_c_stdin,  &_c_stdin,   _READ | _UNBUF, 0},  //stdin
+  {0, &_c_stdin,  &_c_stdin,  _READ  | _UNBUF, 0},  //stdin
   {0, &_c_stdout, &_c_stdout, _WRITE | _UNBUF, 1}, //stdout
   {0, &_c_stderr, &_c_stderr, _WRITE | _UNBUF, 2}, //stderr
   {0, (char *) 0, (char *) 0, 0, 0},
@@ -49,10 +49,13 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define getc elfosgetc
 #define gets elfosgets
 //#define puts elfosputs
+#define read elfos_read_file
+#define write elfos_write_file
+//#define puts elfosputs
 
 /* ElfOS file IO constants */
 #define FD_SIZE 531
-#define BUFSIZE 512
+#define BUFSIZE 32
 #define EOF (-1)
 #define NULL 0
 #define O_OPEN     0
@@ -63,27 +66,26 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define SEEK_CUR  1
 #define SEEK_END  2
 
+//type used in File I/O fsetpos and fgetpos
+#define fpos_t long
+//type used for File I/O fread and fwrite
+#define size_t unsigned int
+
+//Macros used for buffered File I/O
 #define feof(p)    (((p)->flag & _EOF) != 0)
 #define ferror(p)  (((p)->flag & _ERR) != 0)
 #define fileno(p)  ((p))->fd)
 #define fgetc(p)   (--(p)->cnt >= 0 ? (unsigned char) *(p)->ptr++ : _fillbuf(p))
 #define fputc(x,p) (--(p)->cnt >= 0 ? *(p)->ptr++ = (x) : _flushbuf((x),p))
+#define clearerr(p)   ((p)->flag &= ~(_ERR | _EOF))
 
 /* ElfOS kernel functions */
 void elfosputc(char c);
-char elfosgetc(void);
-int elfosgets(char* s);
+int elfosgetc(void);
+char* elfosgets(char* s);
 //int elfosputs(char* s);
-int elfos_sp(void);
-int elfos_lomem(void);
-//void* elfos_alloc(int size);
-//void elfos_free(void* p);
-//int elfos_valid_block(void* p);
-//void elfos_init_fd(int fd);
-//int elfos_open_file(int fd, char* name, int flags);
-//int elfos_close_file(int fd);
-//int elfos_read_file(int fd, char* buf, int count);
-//int elfos_write_file(int fd, char* buf, int count);
+unsigned int elfos_sp(void);
+unsigned int elfos_lomem(void);
 
 /* ElfOS Memory functions */
 void free(void* p);
@@ -96,6 +98,23 @@ int close(int fd);
 int read(int fd, char* buf, int count);
 int write(int fd, char* buf, int count);
 long lseek(int fd, long offset, int origin);
+
+/* ElfOS Buffered IO functions */
+int _fillbuf(FILE* fp);
+int _flushbuf(int x, FILE* fp);
+FILE *fopen(char* name, char* mode);
+int fclose(FILE* fp);
+int fflush(FILE* fp);
+char *fgets(char* out, int size, FILE *in);
+int fputs(char* s, FILE* fp);
+int ungetc(int ch, FILE* fp);
+int fseek(FILE* fp, long offset, int origin);
+long ftell(FILE* fp);
+int fgetpos(FILE* fp, fpos_t *pos);
+int fsetpos(FILE* fp, fpos_t *pos);
+void rewind(FILE* fp);
+size_t fread(void *ptr, size_t size, size_t nobj, FILE* fp);
+size_t fwrite(void *ptr, size_t size, size_t nobj, FILE* fp);
 
 #include <nstdlib.c>
 #include "elfoslib.c"

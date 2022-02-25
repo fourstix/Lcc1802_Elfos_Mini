@@ -1,5 +1,5 @@
 #include "elfoslib.h"
-
+/*
 int elfos_himem(){//get Himem value from Elf/os
 	asm(" ldaD r15,LCCELFOSsavRE\n ldn r15\n phi r14\n");
 	asm(" ld2 r15,'D',(0x0442),0\n");//get himem value
@@ -38,7 +38,21 @@ int elfos_heap_size(void) {
 	asm(" cpy2 r15, r13\n");//copy size into return value
 	asm(" Cretn\n");//return with value in r15
 }
+*/
+unsigned int elfos_himem(void){
+	return *((unsigned int *) 0x0442);
+}
 
+unsigned int elfos_k_heap(void){
+	return *((unsigned int *) 0x0468);
+}
+
+unsigned int heapsize() {
+	unsigned int hi_mem = elfos_himem();
+	unsigned int lo_mem = elfos_lomem();
+	unsigned int heap_size = (hi_mem - lo_mem) - 6;
+	return heap_size;
+}
 //#define malloc elfos_alloc
 //#define free elfos_free
 #define FD_SIZE 531
@@ -50,7 +64,7 @@ void printHeapInfo(void) {
 	printf("Stack Pointer at %x\n", i);
 	i = elfos_himem();
 	printf("Himem = %x\n", i);
-	i = elfos_heap_bottom();
+	i = elfos_k_heap();
 	printf("K_Heap: %x\n",i);
 	i = elfos_lomem();
 	printf("Lowmem =  %x\n", i);	
@@ -71,7 +85,7 @@ void main(){
 	
 	//show heap information before changes
   printHeapInfo(); 
-	i = elfos_heap_size();
+	i = heapsize();
 	printf("Heap available for C: %x\n", i);
 	
 	printf("Negative Test: Allocate 2k blocks until exhausted.\n");
