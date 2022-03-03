@@ -1,5 +1,563 @@
 #ifndef ELFOSLIB_C
 #define ELFOSLIB_C
+
+/*
+ * NTSDLIB.C 
+ */
+//jan 7 trying a new vararg approach for printf
+//jan 29 cleaning up itoa and ltoa before trying double dabble
+//feb 6 switched to double dabble for ltoa. ltoa and itoa now return char *
+//feb 17 switched printstr to out(5,x) from out5(x) - putc/out5 still used elsewhere
+//feb 27, adding memcmp & memcpy
+//mar 28 including float in printf
+//April 4 changing prtflt/ftoa to use dubdabx routine from ltoa, add digit count to dubdabx
+//April 10 #ifdef nofloats used to exclude float code in nstdlib
+//May 26 2013 added strncmp from apple source
+//June 25 removed static keyword from strlen
+//Sept 29 - adding include for assembly versions of strcpy, strcmp for dhrystone optimization
+//Nov 23 added scungy %cx hack for printing single char as hex.
+//jan 29 - changing out(5,x) to putc(x)
+//Mar 14 2017 inserting conditional NOP's into printstr, printf to slow down on 1806
+//17-10-19 register variable declaration in printf
+//20-05-22 rearranged dec/inc in memset
+ int strncmp(const char *s1, const char *s2, unsigned int n)
+/* ANSI sez:
+ *   The `strncmp' function compares not more than `n' characters (characters
+ *   that follow a null character are not compared) from the array pointed to
+ *   by `s1' to the array pointed to by `s2'.
+ *   The `strncmp' function returns an integer greater than, equal to, or less
+ *   than zero, according as the possibly null-terminated array pointed to by
+ *   `s1' is greater than, equal to, or less than the possibly null-terminated
+ *   array pointed to by `s2'.  [4.11.4.4]
+ */
+{
+    for ( ; n > 0; s1++, s2++, --n)
+	if (*s1 != *s2)
+	    return ((*(unsigned char *)s1 < *(unsigned char *)s2) ? -1 : +1);
+	else if (*s1 == '\0')
+	    return 0;
+    return 0;
+}
+
+unsigned int strlen(char *str)
+{
+	unsigned int slen = 0 ;
+	while (*str != 0) {
+      slen++ ;
+      str++ ;
+   }
+   return slen;
+}
+
+char * strcat(char *dst, char *src){
+	char *d;
+
+	if (!dst || !src)
+		return (dst);
+
+	d = dst;
+	for (; *d; d++);
+  
+	for (; *src; src++){
+		*d++ = *src;
+  }
+	*d = 0;
+	return (dst);
+}
+
+char* sprintstr(char* p, char *s){
+    //p points to end of buffered
+    for (; *s; s++){
+  		*p++ = *s;
+    }
+  	*p = 0;
+    strcat(p, s);
+    //return ptr to end
+    return p;
+}//sprintstr
+
+#ifndef nofloats
+static const float round_nums[8] = {
+   0.5,
+   0.05,
+   0.005,
+   0.0005,
+   0.00005,
+   0.000005,
+   0.0000005,
+   0.00000005
+} ;
+static const float mult_nums[8] = {
+   1,
+   10,
+   100,
+   1000,
+   10000,
+   100000,
+   1000000,
+   10000000
+};
+char * ftoa(float flt, char *outbfr,unsigned int dec_digits)
+{
+#define use_leading_plus 0
+	unsigned int idx;
+	float mult;
+	long wholeNum,decimalNum;
+   char *output = outbfr ;
+   char tbfr[40] ;
+   //*******************************************
+   //  extract negative info
+   //*******************************************
+   if (flt < 0.0) {
+      *output++ = '-' ;
+      flt *= -1.0 ;
+   } else {
+      if (use_leading_plus) {
+         *output++ = '+' ;
+      }
+   }
+
+   //  handling rounding by adding .5LSB to the floating-point data
+   if (dec_digits < 8) {
+      flt += round_nums[dec_digits] ;
+   }
+
+   //**************************************************************************
+   //  get fractional multiplier for specified number of digits.
+   //**************************************************************************
+	mult=mult_nums[dec_digits];
+
+   wholeNum = flt;
+   decimalNum = ((flt - wholeNum) * mult);
+	//printf("whole=%ld,fltdec=%lx, decimal=%ld\n",wholeNum,fltdec, decimalNum);
+
+   //*******************************************
+   //  convert integer portion
+   //*******************************************
+   strcpy(output,dubdabx(wholeNum,output,1));
+   output+=strlen(output);
+   // printf("%.3f: whole=%s, dec=%d\n", flt, tbfr, decimalNum) ;
+   if (dec_digits > 0) {
+		*output++ = '.' ;
+		//*******************************************
+		//  convert fractional portion
+		//*******************************************
+		strcpy(output,dubdabx(decimalNum,output,dec_digits));
+	}
+
+   return outbfr;
+}
+#endif
+char * itoa(int s, char *buffer){ //convert an integer to printable ascii in a buffer supplied by the caller
+	unsigned int r,k,n;
+	unsigned int flag=0;
+	char * bptr; bptr=buffer;
+	if (s<0){
+		*bptr='-';bptr++;
+		n=-s;
+	} else{
+		n=s;
+	}
+	k=10000;
+	while(k>0){
+		for(r=0;k<=n;r++,n-=k); // was r=n/k
+		if (flag || r>0||k==1){
+			*bptr=('0'+r);bptr++;
+			flag='y';
+		}
+		//n=n-r*k;
+		k=k/10;
+	}
+
+	*bptr='\0';
+	return buffer;
+}
+char * ltoa(long s, char *buffer){ //convert a long integer to printable ascii in a buffer supplied by the caller
+	char* bptr=buffer;
+	if (s<0){
+		*bptr++='-';
+		s=-s;
+	}
+	strcpy(bptr,dubdabx(s,bptr,1)); //uses assembler double-dabble routine
+	return buffer;
+}
+
+char* sprintint(char* p, int s){ //print an integer
+	char buffer[8];
+	itoa(s,buffer);
+	//return pointer to end 
+  return sprintstr(p, buffer);
+}
+
+char* sprintlint(char* p, long s){ //print a long integer
+	char buffer[12];
+	ltoa(s, buffer);
+  return sprintstr(p, buffer);
+}
+
+#ifndef nofloats
+
+char* sprintflt(char* p, float s){ //print a float
+	char buffer[20]; //need room for two longs and the .
+  ftoa(s, buffer, 3);
+	return sprintstr(p, buffer);
+}
+
+#endif
+
+char* sputxn(char *p, unsigned char x){ //print a nibble as ascii hex
+	if (x<10){
+		*p++ = (x+'0');
+	} else {
+		*p++ = (x+'A'-10);
+	}
+  //make sure it ends with null
+  *p = 0;
+  return p;
+}//sputxn
+char* sputx(char* p, unsigned char x){ //print a unsigned char as ascii hex
+	p = sputxn(p, x>>4);
+	p = sputxn(p, x & 0x0F);
+  *p = 0;
+  //return pointer to end of buffer
+  return p;
+}//sputx
+
+char* sputdx(char* p, unsigned int d) {//print an interger hex value
+  p = sputx(p, d >> 8);
+  p = sputx(p, d & 255);
+  *p = 0;
+  return p;
+}//sputdx
+
+char* sputlx(char* p, unsigned long x) {//print an interger hex value
+  unsigned int  lo = (unsigned int)(x & 0x0000FFFFL);
+  unsigned int  hi = (unsigned int)(x >> 16);
+  p = sputdx(p, hi);
+  p = sputdx(p, lo);
+  *p = 0;
+  return p;
+}//sputdx
+
+/******************************************************************************
+ *  vsprintf - variable sprintf routine
+ *    buf - ptr to character buffer
+ *    fmt - ptr to format string 
+ *    arglist - ptr to argument list 
+ *    argslot - int position of fmt string in caller (1 based)
+ *  returns - int number of arguments processed
+ *
+ *  vsprintf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - print an integer value 
+ *    %x or %X - print an integer value as hex 
+ *    %s - print a string 
+ *    %c - print single character value
+ *    %cx - ptint a single character as hex
+ *    %ld - print a long value as ascii
+ *    %lx - print long value as hex 
+ *    %f - print a float value with 3 decimal places
+ ******************************************************************************/
+int vsprintf(char* buf, char *fmt, int* arglist, int argslot){ //limited implementation of printf
+//								supports only c,d,s,x,l formats without width or other qualifiers
+  //int argslot = 0;	//used to align longs
+  //int * this=(int *)&pptr;
+  unsigned char c,xord;
+	register char* ptr = fmt; //try to save on loads/spills
+  int rc = 0; //return code is the number of arguements processed
+  
+  //advance argument pointer to first argument in list
+  arglist++; 
+
+ //process format string and consume arguments from list
+  while(*ptr) {
+		c = *ptr++;
+		if (c!='%'){
+			*buf++ = c;
+      *buf = 0; //make sure buffer terminates as string
+			//asm(" nop1806\n nop1806\n nop1806\n"); //17-03-13
+		} else{
+			c = *ptr++;
+			switch (c){
+				case 'i': case 'd': 
+          buf = sprintint(buf, *arglist++);
+          argslot++;
+          rc++;
+				break;
+        
+				case 's': 
+					buf = sprintstr(buf, (char *) *arglist++);
+					argslot++;
+          rc++;
+        break;
+
+				case 'c'://scungy support for hex printing as %cx
+					if (*ptr=='x'){ //if there's an x
+						ptr++; //skip over the x
+            //print 1 byte as hex
+						buf = sputx(buf, ((unsigned char) (*arglist++)&255)); 
+					} else{
+					  //print as char
+          	*buf++ = (char)(*arglist++);
+      		  *buf = 0;
+					}
+          argslot++;
+          rc++;
+				break;
+          
+				case 'x': case 'X': 
+		      buf = sputdx(buf, *arglist++);					
+					argslot++;
+          rc++;
+				break;
+
+				case 'l': //longs can be dec or hex
+          //long values must align on an even boundary
+          if (argslot&1) {
+            arglist++;
+            argslot++;
+          }//if argslot is odd
+          xord = *ptr++;
+					if (xord == 'd'){
+  					buf = sprintlint(buf, *(long *) arglist);//treat as a pointer to long												  
+          } else{
+            buf = sputlx(buf, *(long *) arglist);            
+          }//if-else xord = d        
+        //longs consume two slots on arg list   
+        arglist += 2;  
+        argslot += 2;
+        rc++;
+        break;
+  
+#ifndef nofloats
+				case 'f': //float
+          //flotas must align on an even boundary
+          if (argslot&1){
+            arglist++;
+            argslot++;
+          }//if argslot is odd
+          buf = sprintflt(buf, *(float *) arglist);//treat as a pointer to float
+          //longs consume two slots on arg list
+          arglist += 2;
+          argslot += 2;
+          rc++;
+        break;
+#endif
+
+				default:
+					*buf++ = '%';
+          *buf++ = c;
+          *buf = 0; //buffer always ends with null
+        break;  
+			} //switch
+		} //%
+	} //while
+  return rc;
+} //vsprintf
+
+/******************************************************************************
+ *  sprintf - sprintf routine to print to a character buffer
+ *    buf - ptr to character buffer
+ *    fmt - format string 
+ *  returns - int number of arguments processed
+ *
+ *  sprintf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - print an integer value 
+ *    %x or %X - print an integer value as hex 
+ *    %s - print a string 
+ *    %c - print single character value
+ *    %cx - ptint a single character as hex
+ *    %ld - print a long value as ascii
+ *    %lx - print long value as hex 
+ *    %f - print a float value with 3 decimal places
+ ******************************************************************************/
+int sprintf(char * buffer, char * fmt, ...) {
+  int n = 0;
+  int* args = (int *) &fmt;
+  //format string is second arguement in caller arg list
+  n = vsprintf(buffer, fmt, args, 2);
+  return n;
+}//sprintf
+
+/******************************************************************************
+ *  printf - printf routine to print to std out
+ *    fmt - format string 
+ *  returns - int number of arguments processed
+ *
+ *  printf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - print an integer value 
+ *    %x or %X - print an integer value as hex 
+ *    %s - print a string 
+ *    %c - print single character value
+ *    %cx - ptint a single character as hex
+ *    %ld - print a long value as ascii
+ *    %lx - print long value as hex 
+ *    %f - print a float value with 3 decimal places
+ ******************************************************************************/
+int printf(char *fmt, ...){
+  int n = 0;
+  int* args = (int *) &fmt;
+  char * p = (char *) calloc(256, 1);
+  if (p) {
+    //format string is first arguement in caller arg list
+    n = vsprintf(p, fmt, args, 1);
+    puts(p);
+    free(p);
+    }//if p
+    return n;
+}//printf
+
+/******************************************************************************
+ *  fprintf - fprintf routine to print to a file
+ *    fp - FILE * ptr created with fopen()
+ *    fmt - format string 
+ *  returns - int number of arguments processed or EOF if a file error occurs
+ *
+ *  fprintf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - print an integer value 
+ *    %x or %X - print an integer value as hex 
+ *    %s - print a string 
+ *    %c - print single character value
+ *    %cx - ptint a single character as hex
+ *    %ld - print a long value as ascii
+ *    %lx - print long value as hex 
+ *    %f - print a float value with 3 decimal places
+ ******************************************************************************/
+
+int fprintf (FILE *fp, char *fmt, ...) {
+  int n = 0;
+  int rc = 0;
+  int* args = (int *) &fmt;
+  char * p = (char *) calloc(256, 1);
+  
+  if (p) {
+    int rc;
+    //format string is second arguement in caller arg list
+    n = vsprintf(p, fmt, args, 2);
+    rc = fputs(p, fp);
+    free(p);
+    }//if p
+  return (rc == EOF) ? EOF : n;
+}//fprintf
+
+/*
+void printf(char *pptr,...){ //limited implementation of printf
+//								supports only c,d,s,x,l formats without width or other qualifiers
+	unsigned char c,xord;
+	register char* ptr=pptr; //try to save on loads/spills
+	int argslot=0;	//used to align longs
+	int * this=(int *)&pptr;
+	this++; argslot++; //advance argument pointer and slot #
+    while(*ptr) {
+		c=*ptr; ptr++;
+		if (c!='%'){
+			putc(c);
+			asm(" nop1806\n nop1806\n nop1806\n"); //17-03-13
+		} else{
+			c=*ptr;ptr++;
+			switch (c){
+				case 'i': case 'd':
+					printint(*this++);
+					argslot+=1; //next argument slot
+					break;
+				case 's':
+					printstr((char*) *this++);
+					argslot+=1; //next argument slot
+					break;
+				case 'c'://scungy support for hex printing as %cx
+					if (*ptr=='x'){ //if there's an x
+						ptr++; //skip over the x
+						putx(((unsigned int) *this++)&255); //print 1 byte as hex
+					} else{
+						putc((unsigned int) *this++);		//print as char
+					}
+					argslot+=1; //next argument slot
+					break;
+				case 'x': case 'X':
+					putx(((unsigned int) *this)>>8);
+					putx(((unsigned int) *this++)&255);
+					argslot+=1; //next argument slot
+					break;
+				case 'l': //longs can be dec or hex
+					if (*ptr){ //as long as there's something there
+						xord=*ptr++;
+						if (argslot&1) {
+							this++;
+							argslot++;
+						}
+						if(xord=='d'){
+							printlint(*(long *)this);//treats "this" as a pointer to long
+							this+=2;				// and advances it 4 bytes
+						} else{
+							putx(((unsigned int) *this)>>8);
+							putx(((unsigned int) *this++)&255);
+							putx(((unsigned int) *this)>>8);
+							putx(((unsigned int) *this++)&255);
+						}
+						argslot+=2;
+						break;
+					}
+#ifndef nofloats
+				case 'f': //float
+					if (*ptr){ //as long as there's something there
+						if (argslot&1) { //adjust alignment
+							this++;
+							argslot++;
+						}
+						printflt(*(float *)this);//treats "this" as a pointer to float
+						this+=2;				// and advances it 4 bytes
+						argslot+=2;
+						break;
+					}
+#endif
+				default:
+					putc('%');putc(c);
+			} //switch
+		} //%
+	} //while
+} //prtf
+
+void exit(int code){
+	printf("exit %d\n",code);
+	while(1);
+}
+*/
+int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count){
+	unsigned char* p1; unsigned char *p2;
+    int v = 0;
+    p1 = (unsigned char *)Ptr1;
+    p2 = (unsigned char *)Ptr2;
+
+    while(Count-- > 0 && v == 0) {
+        v = *(p1++) - *(p2++);
+    }
+
+    return v;
+}
+
+void* memcpy(void* dest, const void* src, unsigned int count) {
+        char* dst8 = (char*)dest;
+        char* src8 = (char*)src;
+
+        while (count--) {
+            *dst8++ = *src8++;
+        }
+        return dest;
+    }
+
+void *memset(void *s, int c, unsigned int n) //sets memory at s to c for n bytes
+{
+    unsigned char* p=s;
+    while(n){
+        *p = (unsigned char)c;
+        p++;
+        n--;
+	}
+    return s;
+}
+void nstdlibincluder(){
+	asm("\tinclude nstdlib.inc\n"); //strcpy, strcmp
+}
+
 //single character output for elfos
 void elfosputc(char c){
 	asm(" ldaD r15,LCCELFOSsavRE\n ldn r15\n phi r14\n");
@@ -41,7 +599,7 @@ char* elfosgets(char* s){
 	asm(" popr r7\n");//retore reg variable to r7 
 	asm(" Cretn\n");//return to c
 }
-/*
+
 //Write a string to terminal
 int elfosputs(char* s){
 	asm(" ldaD r15,LCCELFOSsavRE\n ldn r15\n phi r14\n");
@@ -58,7 +616,7 @@ int elfosputs(char* s){
 	asm(" popr r7\n");//retore reg variable to r7 
 	asm(" Cretn\n");//return to c
 }
-*/
+
 //get stack pointer
 unsigned int elfos_sp(void){
 	//no elfos api are called so need to restore RE.1

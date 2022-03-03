@@ -2,8 +2,41 @@
 #define ELFOSLIB_H
 
 /* nstdlib.h definitions */
-#include <nstdlib.h>
+//#include <nstdlib.h>
+
+#ifndef putchar
+#define putchar putc
+#endif
+unsigned int strlen(char *str);
+char * strcpy(char *, const char*);
+char * strcat(char* d, char* s);
+//void printstr(char*);
+//void putc(char);
+char * itoa(int, char *);
+char * ltoa(long, char *);
+#ifndef nofloats
+char * ftoa(float, char *,unsigned int);
+#endif
+
+int sprintf(char *p, char* fmt, ...);
+int vsprintf(char* buf, char *fmt, int* argslist, int argslot);
+int printf(char *fmt, ...);
+
+
+//void exit(int); //halt with a numeric error message
+#ifndef max
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count);
+void *memset(void *s, int c, unsigned int n); //sets n bytes of memory at s to c
+void* memcpy(void* dest, const void* src, unsigned int count);
+char * dubdabx(long, char *, int);
+
+void putx(unsigned char x); //print an unsigned char as ascii hex
+
 /* FILE IO */
+#ifndef OPEN_MAX
 #define OPEN_MAX 7
 
 typedef struct _iobuf {
@@ -48,6 +81,8 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define putc elfosputc
 #define getc elfosgetc
 #define gets elfosgets
+#define puts elfosputs
+
 //#define puts elfosputs
 #define read elfos_read_file
 #define write elfos_write_file
@@ -56,6 +91,7 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 /* ElfOS file IO constants */
 #define FD_SIZE 531
 #define BUFSIZE 32
+#define MAXLINE 255
 #define EOF (-1)
 #define NULL 0
 #define O_OPEN     0
@@ -78,12 +114,13 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define fgetc(p)   (--(p)->cnt >= 0 ? (unsigned char) *(p)->ptr++ : _fillbuf(p))
 #define fputc(x,p) (--(p)->cnt >= 0 ? *(p)->ptr++ = (x) : _flushbuf((x),p))
 #define clearerr(p)   ((p)->flag &= ~(_ERR | _EOF))
+#endif
 
 /* ElfOS kernel functions */
 void elfosputc(char c);
 int elfosgetc(void);
 char* elfosgets(char* s);
-//int elfosputs(char* s);
+int elfosputs(char* s);
 unsigned int elfos_sp(void);
 unsigned int elfos_lomem(void);
 
@@ -115,7 +152,8 @@ int fsetpos(FILE* fp, fpos_t *pos);
 void rewind(FILE* fp);
 size_t fread(void *ptr, size_t size, size_t nobj, FILE* fp);
 size_t fwrite(void *ptr, size_t size, size_t nobj, FILE* fp);
+int fprintf (FILE *fp, char *fmt, ...);
 
-#include <nstdlib.c>
+//#include <nstdlib.c>
 #include "elfoslib.c"
 #endif
