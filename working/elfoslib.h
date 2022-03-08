@@ -8,20 +8,20 @@
 #define putchar putc
 #endif
 unsigned int strlen(char *str);
-char * strcpy(char *, const char*);
-char * strcat(char* d, char* s);
-//void printstr(char*);
-//void putc(char);
+
+//char * strcat(char* d, char* s);
+
 char * itoa(int, char *);
 char * ltoa(long, char *);
 #ifndef nofloats
 char * ftoa(float, char *,unsigned int);
 #endif
 
-int sprintf(char *p, char* fmt, ...);
-int vsprintf(char* buf, char *fmt, int* argslist, int argslot);
-int printf(char *fmt, ...);
 
+int printf(char *fmt, ...);
+int sprintf(char *p, char* fmt, ...);
+int scanf(char* fmt, ...);
+int sscanf(char* s, char* fmt, ...);
 
 //void exit(int); //halt with a numeric error message
 #ifndef max
@@ -31,9 +31,41 @@ int printf(char *fmt, ...);
 int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count);
 void *memset(void *s, int c, unsigned int n); //sets n bytes of memory at s to c
 void* memcpy(void* dest, const void* src, unsigned int count);
-char * dubdabx(long, char *, int);
 
-void putx(unsigned char x); //print an unsigned char as ascii hex
+//implmented in nstdlib.inc as assembler code 
+char * dubdabx(long, char *, int);
+char * strcpy(char *, const char*);
+int strcmp(char* s1, char* s2);
+
+/* 
+ * ctype definitions 
+ */
+#ifndef _C_TYPE
+#define _C_TYPE
+#define isspace(c) \
+  (c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r' || c == ' ')
+#define isdigit(c) (c >= '0' && c <= '9')
+#define isalpha(c)  (((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')))
+#define isupper(c)  ((c >= 'A') && (c <= 'Z'))
+#define islower(c)  ((c >= 'a') && (c <= 'z'))
+#define isxdigit(c) (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || \
+  (c >= 'a' && c <= 'f')
+  
+//maximum size of ascii numeric field  
+#define MAX_NUM_SIZE  11  
+//define base unction for string numeric routines
+long atol(char *p, int base);
+
+#ifndef nofloats
+float atof(char *s);
+#endif
+
+#define atoi(p) ((int)atol((p), 10))
+#define atox(p) ((unsigned int)atol((p), 16))
+#define atou(p) ((unsigned int)atol((p), 10))
+#define atolx(p) ((unsigned long)atol((p), 16))
+#define atold(p) (atol((p), 10))
+#endif
 
 /* FILE IO */
 #ifndef OPEN_MAX
@@ -54,22 +86,21 @@ typedef struct _iobuf {
 #define  _EOF   0x08
 #define  _ERR   0x10  
 
-//One char for unbuffered stdio
-char _c_stdin;
-char _c_stdout;
-char _c_stderr;
+//One char buffers for pushback iob
+char _c_iob[OPEN_MAX];
+
 /* stdin, stdout, stderr are unbuffered and call elfos kernel directly
- * The other file handles are buffered by the Elf/OS kernel, and the
- * buffered file io functiosn read and write to the Elf/OS dta as a buffer.
+ * The other file handles are buffered by the Elf/OS kernel, 
+ * so no buffering needed.
  */    
 FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
-  {0, &_c_stdin,  &_c_stdin,  _READ  | _UNBUF, 0},  //stdin
-  {0, &_c_stdout, &_c_stdout, _WRITE | _UNBUF, 1}, //stdout
-  {0, &_c_stderr, &_c_stderr, _WRITE | _UNBUF, 2}, //stderr
-  {0, (char *) 0, (char *) 0, 0, 0},
-  {0, (char *) 0, (char *) 0, 0, 0},
-  {0, (char *) 0, (char *) 0, 0, 0},
-  {0, (char *) 0, (char *) 0, 0, 0}
+  {0, _c_iob,  _c_iob,  _READ  | _UNBUF, 0},  //stdin
+  {0, _c_iob+1, _c_iob+1, _WRITE | _UNBUF, 1}, //stdout
+  {0, _c_iob+2, _c_iob+2, _WRITE | _UNBUF, 2}, //stderr
+  {0, _c_iob+3, _c_iob+3, 0, 0},
+  {0, _c_iob+4, _c_iob+4, 0, 0},
+  {0, _c_iob+5, _c_iob+5, 0, 0},
+  {0, _c_iob+6, _c_iob+6, 0, 0}
 };
 
 /* first 3 file handles are predefined */
@@ -90,7 +121,7 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 
 /* ElfOS file IO constants */
 #define FD_SIZE 531
-#define BUFSIZE 32
+//#define BUFSIZE 32
 #define MAXLINE 255
 #define EOF (-1)
 #define NULL 0
@@ -111,8 +142,6 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define feof(p)    (((p)->flag & _EOF) != 0)
 #define ferror(p)  (((p)->flag & _ERR) != 0)
 #define fileno(p)  ((p))->fd)
-#define fgetc(p)   (--(p)->cnt >= 0 ? (unsigned char) *(p)->ptr++ : _fillbuf(p))
-#define fputc(x,p) (--(p)->cnt >= 0 ? *(p)->ptr++ = (x) : _flushbuf((x),p))
 #define clearerr(p)   ((p)->flag &= ~(_ERR | _EOF))
 #endif
 
@@ -137,8 +166,6 @@ int write(int fd, char* buf, int count);
 long lseek(int fd, long offset, int origin);
 
 /* ElfOS Buffered IO functions */
-int _fillbuf(FILE* fp);
-int _flushbuf(int x, FILE* fp);
 FILE *fopen(char* name, char* mode);
 int fclose(FILE* fp);
 int fflush(FILE* fp);
@@ -153,7 +180,7 @@ void rewind(FILE* fp);
 size_t fread(void *ptr, size_t size, size_t nobj, FILE* fp);
 size_t fwrite(void *ptr, size_t size, size_t nobj, FILE* fp);
 int fprintf (FILE *fp, char *fmt, ...);
-
+int fscanf(FILE *fp, char* fmt, ...);
 //#include <nstdlib.c>
 #include "elfoslib.c"
 #endif

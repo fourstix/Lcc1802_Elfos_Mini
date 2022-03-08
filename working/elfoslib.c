@@ -48,7 +48,7 @@ unsigned int strlen(char *str)
    }
    return slen;
 }
-
+/*
 char * strcat(char *dst, char *src){
 	char *d;
 
@@ -64,14 +64,13 @@ char * strcat(char *dst, char *src){
 	*d = 0;
 	return (dst);
 }
-
+*/
 char* sprintstr(char* p, char *s){
     //p points to end of buffered
     for (; *s; s++){
   		*p++ = *s;
     }
-  	*p = 0;
-    strcat(p, s);
+  	*p = 0;    
     //return ptr to end
     return p;
 }//sprintstr
@@ -148,6 +147,7 @@ char * ftoa(float flt, char *outbfr,unsigned int dec_digits)
    return outbfr;
 }
 #endif
+/*
 char * itoa(int s, char *buffer){ //convert an integer to printable ascii in a buffer supplied by the caller
 	unsigned int r,k,n;
 	unsigned int flag=0;
@@ -172,6 +172,7 @@ char * itoa(int s, char *buffer){ //convert an integer to printable ascii in a b
 	*bptr='\0';
 	return buffer;
 }
+*/
 char * ltoa(long s, char *buffer){ //convert a long integer to printable ascii in a buffer supplied by the caller
 	char* bptr=buffer;
 	if (s<0){
@@ -182,17 +183,18 @@ char * ltoa(long s, char *buffer){ //convert a long integer to printable ascii i
 	return buffer;
 }
 
-char* sprintint(char* p, int s){ //print an integer
-	char buffer[8];
-	itoa(s,buffer);
-	//return pointer to end 
-  return sprintstr(p, buffer);
-}
-
 char* sprintlint(char* p, long s){ //print a long integer
 	char buffer[12];
 	ltoa(s, buffer);
   return sprintstr(p, buffer);
+}
+
+char* sprintint(char* p, int s){ //print an integer
+	//char buffer[8];
+	//itoa(s,buffer);
+	//return pointer to end 
+  //return sprintstr(p, buffer);
+  return sprintlint(p, (long)s);
 }
 
 #ifndef nofloats
@@ -231,10 +233,10 @@ char* sputdx(char* p, unsigned int d) {//print an interger hex value
 }//sputdx
 
 char* sputlx(char* p, unsigned long x) {//print an interger hex value
-  unsigned int  lo = (unsigned int)(x & 0x0000FFFFL);
-  unsigned int  hi = (unsigned int)(x >> 16);
-  p = sputdx(p, hi);
-  p = sputdx(p, lo);
+  //unsigned int  lo = (unsigned int)(x & 0x0000FFFFL);
+  //unsigned int  hi = (unsigned int)(x >> 16);
+  p = sputdx(p, (unsigned int)(x >> 16));
+  p = sputdx(p, (unsigned int)(x & 0x0000FFFFL));
   *p = 0;
   return p;
 }//sputdx
@@ -254,8 +256,9 @@ char* sputlx(char* p, unsigned long x) {//print an interger hex value
  *    %c - print single character value
  *    %cx - ptint a single character as hex
  *    %ld - print a long value as ascii
- *    %lx - print long value as hex 
+ *    %lx or %l - print long value as hex 
  *    %f - print a float value with 3 decimal places
+ *    %% - print an % literal
  ******************************************************************************/
 int vsprintf(char* buf, char *fmt, int* arglist, int argslot){ //limited implementation of printf
 //								supports only c,d,s,x,l formats without width or other qualifiers
@@ -341,11 +344,14 @@ int vsprintf(char* buf, char *fmt, int* arglist, int argslot){ //limited impleme
           argslot += 2;
           rc++;
         break;
-#endif
-
-				default:
+#endif      
+        default:          
 					*buf++ = '%';
-          *buf++ = c;
+          //escape for a literal % is '%%'
+          if (c != '%'){
+            //print out invalid format specifier as '%?'
+            *buf++ = '?';
+          }//
           *buf = 0; //buffer always ends with null
         break;  
 			} //switch
@@ -534,6 +540,420 @@ int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count){
     return v;
 }
 
+/*
+ * Generic function to parse number strings as long
+ * base is 10 (decimal) or 16 (hex)
+ * Cast long to correct value type after use
+ */
+long atol(char* p, int base) {
+	int digit, isneg;
+	long value;
+
+	isneg = 0;
+	value = 0;
+	for (; isspace (*p); p++);
+  
+	if (base == 10) {
+		//for decimal strings handle sign
+		if (*p == '-') {
+			isneg = 1;
+			p++;
+		} else if (*p == '+') {
+			p++;		
+		}//if p == negative or positive sign
+
+	}	else if (base == 16) {
+		//skip past leading 0x prefix
+		if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+			p += 2;
+		}//if p == 0x or 0X prefix
+	}//if-else base
+
+	for (; *p; p++) {
+		if (*p >= '0' && *p <= '9')
+			digit = *p - '0';
+		else if ((base == 16) && (*p >= 'a' && *p <= 'f')) {
+			digit = *p - 'a' + 10;
+		} else if ((base == 16) && (*p >= 'A' && *p <= 'F')) {
+			digit = *p - 'A' + 10;
+		} else {
+			break;
+		}
+		value *= base;
+		value += digit;
+	}//for p is digit
+	
+	if (isneg) {
+		value = 0 - value;
+	}//if isneg
+	
+	return (value);	
+}//atol
+
+#ifndef nofloats
+float atof(char *s){
+ // This function stolen from either Rolf Neugebauer or Andrew Tolmach. 
+ // Probably Rolf.
+ float a = 0.0;
+ int e = 0;
+ int c;
+ int isneg;
+ while(isspace(*s)) {
+   s++;
+ }
+ 
+ if (*s == '-') {
+    isneg = 1;
+    s++;
+  } else {
+    isneg = 0;
+    if (*s == '+')
+      s++;
+  }//if *s = -
+  
+ while ((c = *s++) != '\0' && isdigit(c)) {
+   a = a*10.0 + (c - '0');
+ }
+ if (c == '.') {
+   while ((c = *s++) != '\0' && isdigit(c)) {
+     a = a*10.0 + (c - '0');
+     e = e-1;
+   }
+ }
+ if (c == 'e' || c == 'E') {
+   int sign = 1;
+   int i = 0;
+   c = *s++;
+   if (c == '+')
+     c = *s++;
+   else if (c == '-') {
+     c = *s++;
+     sign = -1;
+   }
+   while (isdigit(c)) {
+     i = i*10 + (c - '0');
+     c = *s++;
+   }
+   e += i*sign;
+ }
+ while (e > 0) {
+   a *= 10.0;
+   e--;
+ }
+ while (e < 0) {
+   a *= 0.1;
+   e++;
+ }
+ if (isneg){
+   a = 0.0 - a;
+ }
+ return a;
+}//atof
+
+//read up to MAX_NUM_SIZE character into a buffer
+int scan_float(FILE* fp, int c, char* buf){
+  int idx = 0;
+  int ndp = 0; //decimal point count
+  //put +, minus, decimal or digit into numeric buffer and get next
+  if (c == '+' || c == '-' || c == '.' || isdigit(c)) {
+    buf[idx++] = c; 
+    if (c == '.') {
+      ndp++; //only one decimal point allowed in a float string
+    }
+    c = fgetc(fp);
+    //read more digits or decimal point for a real value
+    while((isdigit(c) || c == '.') && idx < MAX_NUM_SIZE){  
+      buf[idx++] = c;
+      if (c == '.'){
+        ndp++; // a second period ends the string immediately
+        if (ndp > 1) {
+          break;
+        }//if ndp > 1
+      } //if c is a period
+      c = fgetc(fp);
+    }//while
+    //put unused character back into buffer
+    ungetc(c, fp);
+  }//if c integer chracter
+
+  //force null at end of numeric string
+  buf[idx] = 0;
+  return (c != EOF) ? idx : EOF;
+}//scan_float
+#endif
+
+int scan_hex(FILE* fp, int c, char* buf) {
+  int idx = 0;
+  //might start with 0x or 0X
+  if (c == '0') {
+    buf[idx++] = c; 
+    c = fgetc(fp);
+    if (c == 'x' || c == 'X' || isxdigit(c)) {
+      buf[idx++] = c;
+      c = fgetc(fp);           
+    }//if 0x
+  }//if c == 0
+  
+  //read rest of hex digits
+  while(isxdigit(c) && idx < MAX_NUM_SIZE){  
+    buf[idx++] = c; 
+    c = fgetc(fp);
+  }//while
+  //put unused character back into buffer
+  ungetc(c, fp);         
+  
+  //force null at end of numeric string
+  buf[idx] = 0;
+  return (c != EOF) ? idx : EOF;
+}//scan_hex
+
+//read up to MAX_NUM_SIZE character into a buffer
+int scan_int(FILE* fp, int c, char* buf){
+  int idx = 0;
+  //put + or minus into numeric buffer and get next
+  if (c == '+' || c == '-' || isdigit(c)) {
+    buf[idx++] = c; 
+    c = fgetc(fp);
+    //read more digits for integer
+    while(isdigit(c) && idx < MAX_NUM_SIZE){  
+      buf[idx++] = c; 
+      c = fgetc(fp);
+    }//while
+    //put unused character back into buffer
+    ungetc(c, fp);
+  }//if c integer chracter
+
+  //force null at end of numeric string
+  buf[idx] = 0;
+  return (c != EOF) ? idx : EOF;
+}//scan_int
+
+int skipspace(FILE* fp, int c) {
+  int ch = c;
+  while(isspace(ch) && (ch != EOF)) {
+     ch = fgetc(fp);
+    }//while isspace 
+  return ch;
+}//skipspace 
+ 
+/******************************************************************************
+ *  vsfcanf - variable scanf routine
+ *    fp - ptr to character stream (File* or string wrapped in a FILE*)  
+ *    fmt - ptr to format string 
+ *    arglist - ptr to argument list 
+ *  returns - int number of arguments processed
+ *
+ *  vfscanf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - read a character string as an integer value 
+ *    %x or %X - read a hex string as an integer value 
+ *    %s - read non-whitespace characters as string (whitespace ends read)
+ *    %c - read single character value (even if it is a whitespace)
+ *    %ld or %l - read a string of characters as a long integer value
+ *    %lx - read a string of hex characters as a long integer value
+ *    %f - read a string of characters as a float value 
+ *    %% - read a literal % character from the strream
+ ******************************************************************************/
+int vfscanf(FILE* fp, char *fmt, int* arglist){
+  unsigned char c;
+  register char* ptr = fmt; //try to save on loads/spills
+  int fc = 0; //file character int to hold EOF
+  char tmp[MAX_NUM_SIZE+1]; //temp buffer for characters
+  char* sp; //string ptr
+  int rc = 0; //return code is the number of arguements processed
+  /*
+   * All arguments are pointers, so no need to track argslot because a
+   * pointer to long or float is the same size (int) as pointer to int or char
+   * Since only a single argslot is used everytime, just advance arglist.
+   */
+  //advance argument pointer to first argument in list
+  arglist++;
+  
+  while(*ptr && fc != EOF) {
+		c = *ptr++;
+    fc = fgetc(fp); 
+        
+    if (isspace(c)) {
+      //skip over whitespace in format string
+      while (isspace(c)) {
+        c = *ptr++;
+      }//while isspace
+      //skip over whitespace in file buffer
+      fc = skipspace(fp, fc);
+    }//if isspace 
+    
+    //if we reach the end of file, quit now
+    if (fc == EOF){
+      break;
+    }//fc == EOF
+
+    if (c!='%'){
+      if (c != fc) {
+        //non-whitespace chars must match exactly
+        break;
+      }//if
+    } else{
+      //process format type 
+      c = *ptr++;
+      switch (c){
+        case 'c':
+          //read next character (even if whitespace)
+          *((char*) *arglist++) = fc;
+          rc++;
+        break;
+        
+        case 'd': case 'i':
+          //skip over any leading whitespace in file buffer
+          fc = skipspace(fp, fc);
+          scan_int(fp, fc, tmp);
+          //set argument pointer to integer value read 
+          *((int*) *arglist++) = atoi(tmp);
+          rc++;
+        break;
+
+        case 'l':
+          //skip over any leading whitespace in file buffer
+          fc = skipspace(fp, fc);
+          //next character determines type of long (hex or decimal)
+          c = *ptr++;
+          if (c == 'x'){                    
+            //Process Long Hex
+            scan_hex(fp, fc, tmp);  
+            //set argument pointer to integer value read 
+            *((unsigned long*) *arglist++) = atolx(tmp);              
+          } else {
+            //default is %ld for anything but %lx
+            if (c != 'd') {
+              //move back unused format character (neither x nor d)
+              --ptr;
+            }//if not %ld (%l)
+            scan_int(fp, fc, tmp);
+            //set argument pointer to integer value read 
+            *((long*) *arglist++) = atold(tmp);
+          }//if-else long
+          rc++;
+        break;
+        
+        case 's': 
+          sp = (char *) *arglist++;
+          //skip over any leading whitespace in file buffer
+          fc = skipspace(fp, fc);
+          
+          while(!isspace(fc) && (fc != EOF)){          
+            *sp++ = fc;
+            fc = fgetc(fp);
+          }//while !isspace
+          
+          //push back unused character
+          ungetc(fc, fp);      
+          //end string with null
+          *sp = 0;                    
+          rc++;
+        break;
+        
+        case 'x': case 'X':
+          //skip over whitespace in file buffer
+          fc = skipspace(fp, fc);
+          scan_hex(fp, fc, tmp);
+          //set argument pointer to integer value read 
+          *((unsigned int*) *arglist++) = atox(tmp);
+          rc++;
+        break;
+
+#ifndef nofloats
+        case 'f': //float
+          //skip over whitespace in file buffer
+          fc = skipspace(fp, fc);
+          scan_float(fp, fc, tmp);
+          //set argument pointer to integer value read 
+          *((float*) *arglist++) = atof(tmp);
+          rc++;
+        break;                
+#endif
+
+        default:
+          //check for anything but literal percent '%%' format
+          if (c =! '%' || fc != '%') {            
+            fc = EOF; //unknown format type, exit outer while loop
+          }// if not %% 
+        break;
+      }//switch 
+    }//if-else   
+  }//while
+  
+  return rc;
+}
+
+/******************************************************************************
+ *  scanf - formatted input routine from stdin
+ *    fmt - ptr to format string  
+ *  returns - int number of arguments processed
+ *
+ *  vfscanf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - read a character string as an integer value 
+ *    %x or %X - read a hex string as an integer value 
+ *    %s - read non-whitespace characters as string (whitespace ends read)
+ *    %c - read single character value (even if it is a whitespace)
+ *    %ld or %l - read a string of characters as a long integer value
+ *    %lx - read a string of hex characters as a long integer value
+ *    %f - read a string of characters as a float value 
+ *    %% - read a literal % character from the strream
+ ******************************************************************************/
+int scanf(char* fmt, ...) {
+  int* args = (int *) &fmt;
+  return vfscanf(stdin, fmt, args);
+} //scanf
+
+/******************************************************************************
+ *  fscanf - formatted input routine from a file
+ *    fp - ptr to file (FILE*)
+ *    fmt - ptr to format string  
+ *  returns - int number of arguments processed
+ *
+ *  vfscanf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - read a character string as an integer value 
+ *    %x or %X - read a hex string as an integer value 
+ *    %s - read non-whitespace characters as string (whitespace ends read)
+ *    %c - read single character value (even if it is a whitespace)
+ *    %ld or %l - read a string of characters as a long integer value
+ *    %lx - read a string of hex characters as a long integer value
+ *    %f - read a string of characters as a float value 
+ *    %% - read a literal % character from the strream
+ ******************************************************************************/
+int fscanf(FILE *fp, char* fmt, ...){
+  int* args = (int *) &fmt;
+  return vfscanf(fp, fmt, args);  
+}
+/******************************************************************************
+ *  sscanf - formatted input routine from a string
+ *    s - ptr to sring (char *)
+ *    fmt - ptr to format string  
+ *  returns - int number of arguments processed
+ *
+ *  vfscanf supports a simplified set of formats without width or qualifiers
+ *    %d or %i - read a character string as an integer value 
+ *    %x or %X - read a hex string as an integer value 
+ *    %s - read non-whitespace characters as string (whitespace ends read)
+ *    %c - read single character value (even if it is a whitespace)
+ *    %ld or %l - read a string of characters as a long integer value
+ *    %lx - read a string of hex characters as a long integer value
+ *    %f - read a string of characters as a float value 
+ *    %% - read a literal % character from the strream
+ ******************************************************************************/
+int sscanf(char* s, char* fmt, ...) {
+  //create a (fake) file ptr with the string in the pushback buffer
+  FILE *sfp;
+  int* args = (int *) &fmt;
+  
+  sfp->fd = -1; //not a file stream (close, write, etc. not allowed)
+  sfp->base = (char*) 0;//null base indicates string instead of file
+  sfp->ptr = s; //pointer set to string
+  sfp->cnt = strlen(s); //number of string characters in buffer 
+  sfp->flag = _READ; //only works for fgetc() and ungetc()
+  return vfscanf(sfp, fmt, args);
+}//sscanf
+
+
+
 void* memcpy(void* dest, const void* src, unsigned int count) {
         char* dst8 = (char*)dest;
         char* src8 = (char*)src;
@@ -659,6 +1079,7 @@ void elfos_free(void* p){
 	asm(" popr r7\n");//retore reg variable to r7
 	asm(" Cretn\n");//return ptr value in r15	
 }
+
 /*
 //Test that pointer points to valid memory block
 int elfos_valid_block(void* p){
@@ -675,8 +1096,6 @@ int elfos_valid_block(void* p){
 }
 */
 
-
-/*
 void elfos_init_fd(int fd){
   asm(" ldaD r15,LCCELFOSsavRE\n ldn r15\n phi r14\n");
 	asm(" cpy2 r13, regArg1\n");//copy buff addr into r13 to calcualte dta
@@ -709,7 +1128,7 @@ void elfos_init_fd(int fd){
 	asm(" glo r15\n");//check if counter has gone to zero
 	asm(" lbnz $$rpt\n");//if not keep going
 }
-*/
+
 
 //Call the kernel file open function
 int elfos_open_file(int fd, char *name, int flags){
@@ -821,6 +1240,7 @@ unsigned int elfos_lomem(void){
 }//elf_lomem
 
 //Test that pointer points to valid memory block
+
 int elfos_valid_block(void* p){
 	char *ptr = ((char *) p) - 3; //block type located 3 bytes before block
 	return (*ptr == 0x02); //only type 2 is valid, anything else is invalid 
@@ -837,6 +1257,7 @@ offset:     dw      0,0
             db      0,0,0,0
 dta:        $       ; 512 bytes follow filedes area						
 */
+/*
 void elfos_init_fd(int fd){
 	char *p = (char *)fd;
 	int  dta = fd + 19; //dta is 19 bytes after filedes
@@ -856,7 +1277,7 @@ void elfos_init_fd(int fd){
 		*p++ = 0;
 	}//for	
 }//elfos_init_fd
-
+*/
 /*
  * C Memory allocate and free functions
  */
@@ -953,19 +1374,27 @@ long lseek(int fd, long offset, int origin){
 Buffered File I/O - internal functions
 
 */
-int _fillbuf(FILE* fp){
+int fgetc(FILE* fp){  
+  //(--(p)->cnt >= 0 ? (unsigned char) *(p)->ptr++ : _fillbuf(p))
+  //if we have a push back character return it
+  //This code handles more than one char in pushback buffer for sscanf
+  if (fp->cnt > 0) {
+    fp->cnt--;
+    return (unsigned char) *fp->ptr++;
+  }
+  
   if ((fp->flag & (_READ | _EOF | _ERR )) != _READ) {
     //anything but read is an errorS
     return EOF;
-  }//if _READ
+  }//if _READ  
   if (fp == stdin) {
     //for stdin call kernel function
     fp->ptr = fp->base;
     *fp->ptr = getc();
     fp->cnt = 0;    
   } else {
-    fp->ptr = fp->base;
-    fp->cnt = read(fp->fd, fp->ptr, BUFSIZE);
+    fp->ptr = fp->base; //make sure ptr points one char buffer
+    fp->cnt = read(fp->fd, fp->ptr, 1);
     if (--fp->cnt < 0){
       if(fp->cnt == -1) {
         fp->flag |= _EOF;
@@ -976,37 +1405,27 @@ int _fillbuf(FILE* fp){
       return EOF;
     } // if --cnt < 0
   }//if-else
-  return (int) *fp->ptr++;
+  return (int) *fp->ptr;
 }//_fillbuf
 
-int _flushbuf(int x, FILE* fp){
-  int nc; //number of characters
-  
+int fputc(int x, FILE* fp){
   if (fp < _iob || fp >= _iob + OPEN_MAX) {
     return EOF; // error: invalid pointer
   } //if fp invalid
   if((fp->flag & (_WRITE | _ERR)) != _WRITE) {
     return EOF; //don't flush std io or invalid handles
   }//fp->flag
-  
+  fp->ptr = fp->base;
+  *fp->ptr = (char) x;
+  fp->cnt = 0;
+    
   if (fp == stdout || fp == stderr)  {
     //for stdout and stderr just write to elfos and fix cnt and ptr
     putc(x);
-    fp->ptr = fp->base;
-    *fp->ptr = (char) x;
-    fp->cnt = 0;   
-  } else {
-    // printf("Buffered!\n");
-    nc = fp->ptr - fp->base;
-    if (write(fp->fd, fp->base, nc) != nc){    
-       fp->flag |= _ERR;
-       return EOF;
-    }//if write
-    //printFileInfo(fp);
-     fp->ptr = fp->base;
-     *fp->ptr++ = (char) x;
-     fp->cnt = BUFSIZE-1;
-  }//if-else
+  } else if (write(fp->fd, fp->base, 1) != 1){    
+     fp->flag |= _ERR;
+     return EOF;
+  }//if write   
   return x;  
 }//_flushbuf
 
@@ -1042,42 +1461,30 @@ FILE *fopen(char* name, char* mode){
   }//if fd
 
   //set up initial file ptr
-  fp->fd = fd;
-  fp->base = (char *) malloc(BUFSIZE); //buffer is 32 bytes
-  //if malloc failed, close fd and return error
-  if (fp->base == NULL) { 
-    close(fd);
-    return NULL;
-  }//if fp-base
-  //cnt is nothing read yet or entire buffer available for writing
-  fp->cnt  = (*mode == 'r') ? 0 : BUFSIZE;  
-  fp->ptr  = fp->base; //set ptr to base of buffer initially
-  fp->flag = (*mode == 'r') ? _READ  : _WRITE;
+  fp->fd = fd; 
+  //no buffering cnt is zero unless pushback with ungetc
+  fp->cnt  = 0;
+  //fp->ptr  = fp->base; //set ptr to base of buffer initially
+  fp->flag = (*mode == 'r') ? _READ | _UNBUF : _WRITE | _UNBUF;
   
   return fp;
 }//fopen
 
-
+//does nothing to flush since unbuffered IO
 int fflush(FILE* fp) {
-  int rc;
+  //int rc;
   if (fp < _iob || fp >= _iob + OPEN_MAX) {
     return EOF; // error: invalid pointer
   } //if fp invalid
-
-  //printFileInfo(fp);
-  rc = _flushbuf(0, fp);
+  //reset file pointer and count just in case
   fp->ptr = fp->base;
-  if (fp == stdout || fp == stderr) {
-    fp->cnt = 1;   
-  } else {
-    fp->cnt = BUFSIZE;  
-  }//if stdout or stderr
-  return rc;
+  fp->cnt = 0;
+  return 0;
 }//fflush
 
 
 int fclose(FILE* fp) {
-  int rc;
+  //int rc;
   if (fp < _iob || fp >= _iob + OPEN_MAX) {
     return EOF; // error: invalid pointer
   }//if fp invalid
@@ -1086,29 +1493,36 @@ int fclose(FILE* fp) {
     //closing stdio handles does nothing,
     // but fix ptr and cnt just in case
     fp->ptr = fp->base;
-    fp->cnt = 0;
-    rc = 0; 
-  } else if ((rc = fflush(fp)) != EOF) {
-    free(fp->base); //free buffer
+    fp->cnt = 0; 
+  //} else if ((rc = fflush(fp)) != EOF) {
+  } else {
+    //free(fp->base); //free buffer
     close(fp->fd);  //free Filedes & DTA
     fp->fd = 0;
-    fp->ptr = NULL;
-    fp->base = NULL;
+    //fp->ptr = NULL;
+    //fp->base = NULL;
+    fp->ptr = fp->base;
     fp->cnt = 0;
     fp->flag &= ~(_READ | _WRITE);
   } //if-else if flag
-  return rc;
+  //return rc;
+  return 0;
 }//fclose
 
 int ungetc(int ch, FILE* fp){
-  if (fp < _iob || fp >= _iob + OPEN_MAX) {
-    return EOF; // error: invalid pointer
-  }//if fp invalid
   //don't push back EOF
   if (ch != EOF) {
-    //back up ptr and set to value
-    *(--fp->ptr) = (unsigned char) ch;
-    fp->cnt++;
+    //check base ptr to see if file or wrapped string
+    if (fp->base){
+      //only one character pushback allowed for unbuffered I/O         
+      fp->cnt = 1;      
+    } else {
+      //for wrapped string, back up ptr and increment counter
+      fp->ptr--;
+      fp->cnt++;
+    }//if-else
+    //set ptr to pushback character
+    *(fp->ptr) = (unsigned char) ch;
   }//if ch != EOF
   return ch;
 }//ungetc
@@ -1145,20 +1559,15 @@ int fseek(FILE* fp, long offset, int origin){
   }
   if (fp->flag & _READ){
     if (origin == SEEK_CUR){
-      offset -= fp->cnt;   //remember chars in buffer   
-    }//if SEEK_CUR
+      if (fp->cnt > 0) {
+        offset -= fp->cnt;   //could have one character pushback
+      }//if fp-> cnt > 0   
+    }
+    //if SEEK_CUR
     rc = lseek(fp->fd, offset, origin);
     fp->cnt = 0;  //no chars in buffer after seek
   } else if (fp->flag & _WRITE){
-    if((nc = fp->ptr - fp->base) > 0){
-      //write out any chars in buffer
-      if(write(fp->fd, fp->base, nc) != nc){
-        rc = EOF;
-      }//if write 
-    }//if nc > 0
-    if (rc != EOF){
-      rc = lseek(fp->fd, offset, origin);
-    }
+    rc = lseek(fp->fd, offset, origin);
   }//if-else fp->flag  
   return (rc == EOF) ? EOF : 0;  
 }//fseek
@@ -1177,15 +1586,12 @@ long ftell(FILE* fp){
      * those from ungetc) cause the position to be
      * smaller than that in the underlying object.
      */
-     pos -= fp->cnt;
-  } else if (fp->flag & _WRITE) {
-    /*
-     * Writing.  Any buffered characters cause the
-     * position to be greater than that in the
-     * underlying object.
-     */
-     pos += (fp->ptr - fp->base);
-  }
+    if (fp->cnt > 0) {
+    pos -= fp->cnt;   
+    }//
+     
+  }//if read 
+  //No buffering so no unwritten chars to worry about
   return pos;
 }//ftell
 
@@ -1230,17 +1636,15 @@ size_t fread(void *ptr,  size_t size, size_t nobj, FILE* fp){
       }//for
       rc = nobj;
   } else {
-    //if characters in read buffer, use those first
-    nc = (fp->cnt > cb) ? cb : fp->cnt;
-    
-    while(fp->cnt--) {
-      *p++ = *fp->ptr++;
+    //if a character was pushed back use that as first character
+    if (fp->cnt > 0) {
+      nc = 1;
+      fp->cnt--;
+      *p++ = *fp->ptr;
       cb--;
-      if (cb == 0) {
-        break;
-      }//if cb == 0
-    }//while
-
+    }//if fp->cnt > 0
+        
+    
     //write out the reing bytes
     if (cb > 0) {
       nc += read(fp->fd, p, cb);
@@ -1274,20 +1678,20 @@ size_t fwrite(void *ptr,  size_t size, size_t nobj, FILE* fp){
     rc = nobj;
   } else {
     //flush buffer before writing
-    if((fp->ptr - fp->base) > 0){
+    //if((fp->ptr - fp->base) > 0){
       //write out any chars in buffer
-      rc = fflush(fp);
-      }//if write               
-    if (rc != EOF) {
-        nc = write(fp->fd, ptr, count);
-        if (nc != EOF) {
-          //if write was okay don't do division
-          if (nc == count) {
-            rc = nobj;
-          } else {
-          rc = nc / size; //rc is number of size objects written
-          }//if-else nc == count
-        } //if nc != EOF
+    //  rc = fflush(fp);
+    //  }//if write               
+    //if (rc != EOF) {
+    nc = write(fp->fd, ptr, count);
+    if (nc != EOF) {
+      //if write was okay don't do division
+      if (nc == count) {
+        rc = nobj;
+      } else {
+        rc = nc / size; //rc is number of size objects written
+      }//if-else nc == count
+      //  } //if nc != EOF
     } else {
 			//return 0 on error
 			rc = 0;
