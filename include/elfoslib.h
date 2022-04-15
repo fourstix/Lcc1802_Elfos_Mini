@@ -7,12 +7,40 @@
 #ifndef putchar
 #define putchar putc
 #endif
-unsigned int strlen(char *str);
+//Maximum size string buffer in Elf/OS
+#define MAX_BUFFER 256
 
-//char * strcat(char* d, char* s);
+/* String functions */
+//strlen function in assembly
+unsigned int elfos_strlen(char* s);
+#define strlen elfos_strlen
+//Use BIOS strcpy function
+char* elfos_strcpy(char * s, const char *ct);
+#define strcpy elfos_strcpy
+
+//Use BIOS strcmp function
+int elfos_strcmp(char * cs, char *ct);
+#define strcmp elfos_strcmp
+
+//strcat function in assembly
+char * elfos_strcat(char* d, char* s);
+#define strcat elfos_strcat
+
+//strncmp function in assembly
+int elfos_strncmp(char *s1, char *s2, unsigned int n);
+#define strncmp elfos_strncmp
+
+//strncpy function in assembly
+char* elfos_strncpy (char* d, char *s, unsigned int n);
+#define strncpy elfos_strncpy
+
+//strncat function in assembly
+char* elfos_strncat (char* d, char *s, unsigned int n);
+#define strncat elfos_strncat
 
 char * itoa(int, char *);
 char * ltoa(long, char *);
+
 #ifndef nofloats
 char * ftoa(float, char *,unsigned int);
 #endif
@@ -28,48 +56,74 @@ int sscanf(char* s, char* fmt, ...);
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
-int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count);
-void *memset(void *s, int c, unsigned int n); //sets n bytes of memory at s to c
-void* memcpy(void* dest, const void* src, unsigned int count);
 
+//int memcmp(const void *Ptr1, const void *Ptr2, unsigned int Count);
+int elfos_memcmp(void *p1, void *p2, unsigned int n);
+#define memcmp elfos_memcmp
+//void *memset(void *s, int c, unsigned int n); 
+//sets n bytes of memory at s to c
+void *elfos_memset(void *s, int c, unsigned int n);
+#define memset elfos_memset
+//void* memcpy(void* dest, const void* src, unsigned int count);
+void* elfos_memcpy(void* dest, const void* src, unsigned int count);
+#define memcpy elfos_memcpy
 //implmented in nstdlib.inc as assembler code 
 char * dubdabx(long, char *, int);
-char * strcpy(char *, const char*);
-int strcmp(char* s1, char* s2);
 
 /* 
  * ctype definitions 
  */
 #ifndef _C_TYPE
 #define _C_TYPE
-#define isspace(c) \
-  (c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r' || c == ' ')
-#define isdigit(c) (c >= '0' && c <= '9')
-#define isalpha(c)  (((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')))
+//Bios functions for isdigit and isxdigit
+int elfos_isnum(char ct);
+int elfos_ishex(char ct);
+int elfos_isalpha(char ct);
+int elfos_isalnum(char ct);
+int elfos_isspace(char ct);
+//#define isspace(c) \
+//  (c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r' || c == ' ')
 #define isupper(c)  ((c >= 'A') && (c <= 'Z'))
 #define islower(c)  ((c >= 'a') && (c <= 'z'))
-#define isxdigit(c) (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || \
+
+//#define isdigit(c) (c >= '0' && c <= '9')
+//#define isalpha(c)  (((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')))
+//#define isxdigit(c) (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || \
   (c >= 'a' && c <= 'f')
+#define isspace elfos_isspace  
+#define isalpha elfos_isalpha
+#define isdigit elfos_isnum
+#define isxdigit elfos_ishex
+#define isalnum elfos_isalnum
   
 //maximum size of ascii numeric field  
 #define MAX_NUM_SIZE  11  
 //define base unction for string numeric routines
-long atol(char *p, int base);
+//long atol(char *p, int base);
 
 #ifndef nofloats
 float atof(char *s);
 #endif
 
-#define atoi(p) ((int)atol((p), 10))
-#define atox(p) ((unsigned int)atol((p), 16))
-#define atou(p) ((unsigned int)atol((p), 10))
-#define atolx(p) ((unsigned long)atol((p), 16))
-#define atold(p) (atol((p), 10))
+//functions for ascii number conversion
+unsigned long atolx(char *p);
+long elfos_atol(char * s);
+unsigned int elfos_hexin(char * p);
+
+#define atol(p) elfos_atol(p)
+#define atoi(p) ((int)elfos_atol(p))
+#define atox(p) ((unsigned int)atolx(p))
+#define atou(p) ((unsigned int)elfos_atol(p))
+#define atold(p) (elfos_atol(p))
+
+//bios functions for hex conversion
+char* elfos_hexout2(char * p, unsigned int x);
+char* elfos_hexout4(char * p, unsigned int x);
 #endif
 
 /* FILE IO */
-#ifndef OPEN_MAX
-#define OPEN_MAX 7
+#ifndef MAX_OPEN_FILES
+#define MAX_OPEN_FILES 7
 
 typedef struct _iobuf {
     int   cnt;
@@ -87,13 +141,13 @@ typedef struct _iobuf {
 #define  _ERR   0x10  
 
 //One char buffers for pushback iob
-char _c_iob[OPEN_MAX];
+char _c_iob[MAX_OPEN_FILES];
 
 /* stdin, stdout, stderr are unbuffered and call elfos kernel directly
  * The other file handles are buffered by the Elf/OS kernel, 
  * so no buffering needed.
  */    
-FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
+FILE _iob[MAX_OPEN_FILES] = { // stdin, stdout, stder + 4 buffered file handles
   {0, _c_iob,  _c_iob,  _READ  | _UNBUF, 0},  //stdin
   {0, _c_iob+1, _c_iob+1, _WRITE | _UNBUF, 1}, //stdout
   {0, _c_iob+2, _c_iob+2, _WRITE | _UNBUF, 2}, //stderr
@@ -144,6 +198,7 @@ FILE _iob[OPEN_MAX] = { // stdin, stdout, stder + 4 buffered file handles
 #define fileno(p)  ((p))->fd)
 #define clearerr(p)   ((p)->flag &= ~(_ERR | _EOF))
 #endif
+/* End: FILE IO */
 
 /* ElfOS kernel functions */
 void elfosputc(char c);
@@ -152,6 +207,12 @@ char* elfosgets(char* s);
 int elfosputs(char* s);
 unsigned int elfos_sp(void);
 unsigned int elfos_lomem(void);
+void elfos_exit(int code);
+
+/* ElfOS Exit function */
+#define exit(c)  elfos_exit(c)
+#define EXIT_SUCCESS  (0)
+#define EXIT_FAILURE  (-1)
 
 /* ElfOS Memory functions */
 void free(void* p);
@@ -173,7 +234,7 @@ char *fgets(char* out, int size, FILE *in);
 int fputs(char* s, FILE* fp);
 int ungetc(int ch, FILE* fp);
 int fseek(FILE* fp, long offset, int origin);
-long ftell(FILE* fp);
+fpos_t ftell(FILE* fp);
 int fgetpos(FILE* fp, fpos_t *pos);
 int fsetpos(FILE* fp, fpos_t *pos);
 void rewind(FILE* fp);
