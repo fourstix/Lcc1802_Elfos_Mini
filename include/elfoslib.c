@@ -244,6 +244,12 @@ int vsprintf(char* buf, char *fmt, int* arglist, int argslot){ //limited impleme
           rc++;
 				break;
         
+        case 'u': 
+          buf = sprintint(buf, (unsigned int) *arglist++);
+          argslot++;
+          rc++;
+  			break;
+                
 				case 's': 
 					buf = sprintstr(buf, (char *) *arglist++);
 					argslot++;
