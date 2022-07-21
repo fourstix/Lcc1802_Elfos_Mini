@@ -870,6 +870,15 @@ int vfscanf(FILE* fp, char *fmt, int* arglist){
           *((int*) *arglist++) = atoi(tmp);
           rc++;
         break;
+        
+        case 'u':
+          //skip over any leading whitespace in file buffer
+          fc = skipspace(fp, fc);
+          scan_int(fp, fc, tmp);
+          //set argument pointer to unsigned integer value read 
+          *((unsigned int*) *arglist++) = atou(tmp);
+          rc++;
+        break;        
 
         case 'l':
           //skip over any leading whitespace in file buffer
